@@ -1,0 +1,1177 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="h-full bg-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Editor & Assinador de Documentos</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Google Fonts para opções de tipografia -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Dancing+Script:wght@600&family=Inter:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Montserrat:wght@400;600;700&family=Open+Sans:wght@400;600&family=Pacifico&family=Roboto:wght@400;500;700&family=Space+Mono&display=swap" rel="stylesheet">
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <!-- PDF.js para renderização de PDFs -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+  <!-- Fabric.js para o Canvas Interativo de Anotações -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+
+  <!-- jsPDF para exportação final do PDF assinado -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            roboto: ['Roboto', 'sans-serif'],
+            lora: ['Lora', 'serif'],
+            montserrat: ['Montserrat', 'sans-serif'],
+            caveat: ['Caveat', 'cursive'],
+            dancing: ['Dancing Script', 'cursive'],
+            pacifico: ['Pacifico', 'cursive'],
+            mono: ['Space Mono', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Estilização customizada da barra de rolagem da sidebar estilo editor profissional */
+    .toolbar-scrollbar::-webkit-scrollbar {
+      width: 5px;
+    }
+    .toolbar-scrollbar::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    .toolbar-scrollbar::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+    .canvas-container {
+      margin: 0 auto !important;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body class="h-full flex flex-col font-sans text-slate-800 antialiased bg-slate-100 overflow-hidden">
+
+  <!-- TOP NAVBAR -->
+  <header class="h-14 bg-white border-b border-slate-200 px-4 flex items-center justify-between z-20 shrink-0">
+    <div class="flex items-center gap-3">
+      <div class="bg-indigo-600 text-white p-2 rounded-lg flex items-center justify-center shadow-md shadow-indigo-100">
+        <i data-lucide="file-signature" class="w-5 h-5"></i>
+      </div>
+      <div>
+        <h1 class="font-bold text-slate-800 text-base leading-tight">DocuEditor & Sign</h1>
+        <p class="text-xs text-slate-500">Editor e Assinador de Documentos</p>
+      </div>
+    </div>
+
+    <!-- Controles Centrais do Documento -->
+    <div class="flex items-center gap-2 bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs">
+      <button id="prev-page" class="p-1.5 hover:bg-white rounded transition text-slate-600 hover:text-slate-900 disabled:opacity-40">
+        <i data-lucide="chevron-left" class="w-4 h-4"></i>
+      </button>
+      <span class="font-medium px-2 text-slate-700">Página <span id="page-num">1</span> de <span id="page-count">1</span></span>
+      <button id="next-page" class="p-1.5 hover:bg-white rounded transition text-slate-600 hover:text-slate-900 disabled:opacity-40">
+        <i data-lucide="chevron-right" class="w-4 h-4"></i>
+      </button>
+      <div class="h-4 w-px bg-slate-300 mx-1"></div>
+      <button id="zoom-out" class="p-1.5 hover:bg-white rounded transition text-slate-600">
+        <i data-lucide="zoom-out" class="w-4 h-4"></i>
+      </button>
+      <span id="zoom-level" class="font-medium text-slate-700 w-12 text-center">100%</span>
+      <button id="zoom-in" class="p-1.5 hover:bg-white rounded transition text-slate-600">
+        <i data-lucide="zoom-in" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <!-- Botões de Ação Direita -->
+    <div class="flex items-center gap-2">
+      <label for="pdf-upload" class="cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-semibold py-2 px-3 rounded-lg flex items-center gap-1.5 transition">
+        <i data-lucide="upload-cloud" class="w-4 h-4 text-slate-500"></i>
+        <span>Carregar PDF</span>
+        <input type="file" id="pdf-upload" accept="application/pdf" class="hidden">
+      </label>
+
+      <button id="btn-download" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold py-2 px-3 rounded-lg flex items-center gap-1.5 shadow-sm transition">
+        <i data-lucide="download" class="w-4 h-4"></i>
+        <span>Baixar PDF</span>
+      </button>
+
+      <button id="btn-open-email-modal" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold py-2 px-3 rounded-lg flex items-center gap-1.5 shadow-sm transition">
+        <i data-lucide="send" class="w-4 h-4"></i>
+        <span>Enviar por E-mail</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ÁREA DE TRABALHO -->
+  <div class="flex-1 flex overflow-hidden relative">
+
+    <!-- BARRA DE FERRAMENTAS LATERAL ESQUERDA (ESTILO EDITORES PDF) -->
+    <aside class="w-16 bg-white border-r border-slate-200 flex flex-col items-center py-3 gap-1 z-10 toolbar-scrollbar overflow-y-auto shrink-0 shadow-sm">
+      
+      <!-- Selecionar / Mover -->
+      <button id="tool-select" class="tool-btn active w-11 h-11 rounded-lg flex flex-col items-center justify-center transition text-slate-600 hover:bg-slate-100 relative group" title="Selecionar / Mover (V)">
+        <i data-lucide="mouse-pointer" class="w-5 h-5"></i>
+        <span class="absolute left-full ml-2 px-2 py-1 bg-slate-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap pointer-events-none z-30">Selecionar</span>
+      </button>
+
+      <div class="w-8 h-px bg-slate-200 my-1"></div>
+
+      <!-- Inserir Texto -->
+      <button id="tool-text" class="tool-btn w-11 h-11 rounded-lg flex flex-col items-center justify-center transition text-slate-600 hover:bg-slate-100 relative group" title="Texto Personalizado">
+        <i data-lucide="type" class="w-5 h-5"></i>
+        <span class="absolute left-full ml-2 px-2 py-1 bg-slate-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap pointer-events-none z-30">Texto</span>
+      </button>
+
+      <!-- Desenho Livre / Caneta -->
+      <button id="tool-draw" class="tool-btn w-11 h-11 rounded-lg flex flex-col items-center justify-center transition text-slate-600 hover:bg-slate-100 relative group" title="Caneta / Desenho Livre">
+        <i data-lucide="pencil" class="w-5 h-5"></i>
+        <span class="absolute left-full ml-2 px-2 py-1 bg-slate-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap pointer-events-none z-30">Caneta</span>
+      </button>
+
+      <!-- Campo de Assinatura -->
+      <button id="tool-signature" class="tool-btn w-11 h-11 rounded-lg flex flex-col items-center justify-center transition text-indigo-600 hover:bg-indigo-50 relative group" title="Inserir Assinatura">
+        <i data-lucide="pen-tool" class="w-5 h-5"></i>
+        <span class="absolute left-full ml-2 px-2 py-1 bg-slate-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap pointer-events-none z-30">Assinatura</span>
+      </button>
+
+      <div class="w-8 h-px bg-slate-200 my-1"></div>
+
+      <!-- Reta / Linha -->
+      <button id="tool-line" class="tool-btn w-11 h-11 rounded-lg flex flex-col items-center justify-center transition text-slate-600 hover:bg-slate-100 relative group" title="Inserir Linha">
+        <i data-lucide="minus" class="w-5 h-5 -rotate-45"></i>
+        <span class="absolute left-full ml-2 px-2 py-1 bg-slate-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap pointer-events-none z-30">Linha</span>
+      </button>
+
+      <!-- Seta -->
+      <button id="tool-arrow" class="tool-btn w-11 h-11 rounded-lg flex flex-col items-center justify-center transition text-slate-600 hover:bg-slate-100 relative group" title="Inserir Seta">
+        <i data-lucide="arrow-up-right" class="w-5 h-5"></i>
+        <span class="absolute left-full ml-2 px-2 py-1 bg-slate-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap pointer-events-none z-30">Seta</span>
+      </button>
+
+      <!-- Retângulo -->
+      <button id="tool-rect" class="tool-btn w-11 h-11 rounded-lg flex flex-col items-center justify-center transition text-slate-600 hover:bg-slate-100 relative group" title="Retângulo">
+        <i data-lucide="square" class="w-5 h-5"></i>
+        <span class="absolute left-full ml-2 px-2 py-1 bg-slate-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap pointer-events-none z-30">Retângulo</span>
+      </button>
+
+      <!-- Círculo -->
+      <button id="tool-circle" class="tool-btn w-11 h-11 rounded-lg flex flex-col items-center justify-center transition text-slate-600 hover:bg-slate-100 relative group" title="Círculo">
+        <i data-lucide="circle" class="w-5 h-5"></i>
+        <span class="absolute left-full ml-2 px-2 py-1 bg-slate-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap pointer-events-none z-30">Círculo</span>
+      </button>
+
+      <div class="w-8 h-px bg-slate-200 my-1"></div>
+
+      <!-- Carimbos -->
+      <button id="tool-stamp" class="tool-btn w-11 h-11 rounded-lg flex flex-col items-center justify-center transition text-slate-600 hover:bg-slate-100 relative group" title="Carimbos Prontos">
+        <i data-lucide="stamp" class="w-5 h-5"></i>
+        <span class="absolute left-full ml-2 px-2 py-1 bg-slate-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap pointer-events-none z-30">Carimbo</span>
+      </button>
+
+      <!-- Data Atual -->
+      <button id="tool-date" class="tool-btn w-11 h-11 rounded-lg flex flex-col items-center justify-center transition text-slate-600 hover:bg-slate-100 relative group" title="Inserir Data Hoje">
+        <i data-lucide="calendar" class="w-5 h-5"></i>
+        <span class="absolute left-full ml-2 px-2 py-1 bg-slate-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap pointer-events-none z-30">Data</span>
+      </button>
+
+      <div class="mt-auto w-8 h-px bg-slate-200 my-1"></div>
+
+      <!-- Apagar Item Selecionado -->
+      <button id="tool-delete" class="w-11 h-11 rounded-lg flex flex-col items-center justify-center transition text-rose-500 hover:bg-rose-50 relative group" title="Deletar Elemento (Delete/Backspace)">
+        <i data-lucide="trash-2" class="w-5 h-5"></i>
+        <span class="absolute left-full ml-2 px-2 py-1 bg-slate-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap pointer-events-none z-30">Deletar</span>
+      </button>
+    </aside>
+
+    <!-- CONTAINER DA ÁREA DE TRABALHO / CANVAS -->
+    <main class="flex-1 flex flex-col overflow-hidden bg-slate-200/70 relative">
+      
+      <!-- SUB-BARRA DE PROPRIEDADES DINÂMICA (Aparece de acordo com o objeto ou ferramenta) -->
+      <div id="sub-toolbar" class="h-12 bg-white border-b border-slate-200 px-4 flex items-center gap-3 shrink-0 text-xs text-slate-700 shadow-sm z-10 overflow-x-auto">
+        <span class="font-semibold text-slate-500 flex items-center gap-1">
+          <i data-lucide="sliders" class="w-3.5 h-3.5"></i> Opções:
+        </span>
+        <div class="h-4 w-px bg-slate-300"></div>
+
+        <!-- Opções de Texto -->
+        <div id="text-properties" class="flex items-center gap-2">
+          <!-- Família de Fonte -->
+          <select id="font-family" class="bg-slate-100 border border-slate-300 rounded px-2 py-1 text-slate-700 font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500">
+            <option value="Inter">Inter (Padrão)</option>
+            <option value="Roboto">Roboto</option>
+            <option value="Lora">Lora (Serif)</option>
+            <option value="Montserrat">Montserrat</option>
+            <option value="Space Mono">Space Mono</option>
+            <option value="Caveat">Caveat (Manuscrito)</option>
+            <option value="Dancing Script">Dancing Script</option>
+            <option value="Pacifico">Pacifico</option>
+          </select>
+
+          <!-- Tamanho da Fonte -->
+          <div class="flex items-center gap-1">
+            <label class="text-slate-500">Tam:</label>
+            <input type="number" id="font-size" value="20" min="8" max="120" class="w-14 bg-slate-100 border border-slate-300 rounded px-2 py-1 text-center font-medium">
+          </div>
+
+          <!-- Negrito e Itálico -->
+          <button id="btn-bold" class="p-1.5 border border-slate-300 rounded hover:bg-slate-100 font-bold w-7 h-7 flex items-center justify-center">B</button>
+          <button id="btn-italic" class="p-1.5 border border-slate-300 rounded hover:bg-slate-100 italic font-serif w-7 h-7 flex items-center justify-center">I</button>
+        </div>
+
+        <div class="h-4 w-px bg-slate-300"></div>
+
+        <!-- Cor de Preenchimento / Linha -->
+        <div class="flex items-center gap-2">
+          <label class="text-slate-500">Cor:</label>
+          <input type="color" id="element-color" value="#1e293b" class="w-7 h-7 rounded border border-slate-300 cursor-pointer p-0 bg-transparent">
+        </div>
+
+        <!-- Espessura do Traço -->
+        <div id="stroke-width-container" class="flex items-center gap-2">
+          <label class="text-slate-500">Espessura:</label>
+          <input type="range" id="stroke-width" min="1" max="20" value="3" class="w-20 accent-indigo-600">
+        </div>
+      </div>
+
+      <!-- CANVAS VIEWPORT SCROLLABLE -->
+      <div id="canvas-viewport" class="flex-1 overflow-auto p-8 flex justify-center items-start relative">
+        <!-- O Canvas do Fabric.js ficará aqui dentro -->
+        <div id="canvas-wrapper" class="relative">
+          <canvas id="pdf-canvas"></canvas>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- MODAL: GERADOR / DESENHO DE ASSINATURA -->
+  <div id="modal-signature" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-100 transform transition-all">
+      <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+        <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
+          <i data-lucide="pen-tool" class="w-5 h-5 text-indigo-600"></i>
+          Criar Assinatura Digital
+        </h3>
+        <button id="close-modal-sig" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Abas de Assinatura (Desenhar / Digitar) -->
+      <div class="p-6">
+        <div class="flex border-b border-slate-200 mb-4">
+          <button id="tab-draw" class="pb-2 px-4 border-b-2 border-indigo-600 font-semibold text-indigo-600 text-sm">Desenhar</button>
+          <button id="tab-type" class="pb-2 px-4 border-b-2 border-transparent font-medium text-slate-500 text-sm hover:text-slate-700">Digitar Nome</button>
+        </div>
+
+        <!-- Conteúdo Aba 1: Desenhar -->
+        <div id="content-tab-draw" class="space-y-3">
+          <p class="text-xs text-slate-500">Desenhe sua assinatura no quadro abaixo usando o mouse ou touch screen:</p>
+          <div class="border-2 border-dashed border-slate-300 rounded-lg bg-slate-50 relative">
+            <canvas id="signature-pad" width="430" height="160" class="cursor-crosshair w-full"></canvas>
+            <button id="clear-sig-pad" class="absolute bottom-2 right-2 text-xs text-slate-500 bg-white border border-slate-200 px-2 py-1 rounded hover:bg-slate-100">
+              Limpar
+            </button>
+          </div>
+        </div>
+
+        <!-- Conteúdo Aba 2: Digitar -->
+        <div id="content-tab-type" class="space-y-4 hidden">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Digite seu Nome:</label>
+            <input type="text" id="typed-sig-input" placeholder="Ex: João da Silva" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Escolha o Estilo de Fonte:</label>
+            <select id="typed-sig-font" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm">
+              <option value="Caveat">Estilo Cursivo 1 (Caveat)</option>
+              <option value="Dancing Script">Estilo Cursivo 2 (Dancing Script)</option>
+              <option value="Pacifico">Estilo Cursivo 3 (Pacifico)</option>
+            </select>
+          </div>
+          <!-- Pré-visualização -->
+          <div class="h-20 border border-slate-200 rounded-lg flex items-center justify-center bg-slate-50 p-2">
+            <span id="typed-sig-preview" class="text-2xl font-caveat text-indigo-900">João da Silva</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
+        <button id="cancel-sig" class="px-4 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100">Cancelar</button>
+        <button id="apply-sig" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 shadow-sm">Inserir no Documento</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: SELEÇÃO DE CARIMBOS -->
+  <div id="modal-stamps" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-100">
+      <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+        <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
+          <i data-lucide="stamp" class="w-5 h-5 text-indigo-600"></i>
+          Escolher Carimbo
+        </h3>
+        <button id="close-modal-stamp" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="p-6 grid grid-cols-2 gap-3">
+        <button data-stamp="APROVADO" data-color="#16a34a" class="stamp-option border-2 border-emerald-600 text-emerald-600 font-extrabold text-lg py-3 px-2 rounded hover:bg-emerald-50 tracking-wider">
+          ✓ APROVADO
+        </button>
+        <button data-stamp="REJEITADO" data-color="#dc2626" class="stamp-option border-2 border-red-600 text-red-600 font-extrabold text-lg py-3 px-2 rounded hover:bg-red-50 tracking-wider">
+          ✕ REJEITADO
+        </button>
+        <button data-stamp="CONFIDENCIAL" data-color="#d97706" class="stamp-option border-2 border-amber-600 text-amber-600 font-extrabold text-base py-3 px-2 rounded hover:bg-amber-50 tracking-wider">
+          🔒 CONFIDENCIAL
+        </button>
+        <button data-stamp="PAGO" data-color="#2563eb" class="stamp-option border-2 border-blue-600 text-blue-600 font-extrabold text-lg py-3 px-2 rounded hover:bg-blue-50 tracking-wider">
+          ★ PAGO
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ENVIAR POR E-MAIL -->
+  <div id="modal-email" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-100">
+      <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+        <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
+          <i data-lucide="send" class="w-5 h-5 text-emerald-600"></i>
+          Enviar Documento por E-mail
+        </h3>
+        <button id="close-modal-email" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="form-send-email" class="p-6 space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Nome do Destinatário:</label>
+          <input type="text" id="email-recipient-name" required placeholder="Ex: Maria Santos" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">E-mail do Destinatário:</label>
+          <input type="email" id="email-recipient-address" required placeholder="destinatario@empresa.com" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Assunto:</label>
+          <input type="text" id="email-subject" value="Documento Assinado e Finalizado" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Mensagem:</label>
+          <textarea id="email-message" rows="3" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">Olá! Segue em anexo o documento devidamente revisado e assinado.</textarea>
+        </div>
+
+        <div class="pt-2 flex justify-end gap-2">
+          <button type="button" id="cancel-email" class="px-4 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100">Cancelar</button>
+          <button type="submit" id="submit-email" class="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 shadow-sm flex items-center gap-1.5">
+            <i data-lucide="send" class="w-3.5 h-3.5"></i>
+            <span>Disparar E-mail</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- NOTIFICAÇÃO TOAST CUSTOMIZADA -->
+  <div id="toast" class="fixed bottom-5 right-5 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 transform translate-y-20 opacity-0 transition-all duration-300 z-50 border border-slate-700">
+    <i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-400"></i>
+    <span id="toast-message" class="text-sm font-medium">Ação realizada com sucesso!</span>
+  </div>
+
+  <!-- LÓGICA JAVASCRIPT COMPLETA DA APLICAÇÃO -->
+  <script>
+    // Inicializar Ícones Lucide
+    lucide.createIcons();
+
+    // Configurações Globais do PDF.js Worker
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    // Estado da Aplicação
+    const state = {
+      pdfDoc: null,
+      pageNum: 1,
+      pageCount: 0,
+      zoom: 1.0,
+      activeTool: 'select',
+      fabricCanvas: null,
+      pageCanvasObjects: {}, // Guarda objetos anotados por página
+      sigCanvas: null,
+      sigCtx: null,
+      isDrawingSig: false
+    };
+
+    // Documento Demo Padrão (Caso o usuário não suba PDF imediatamente)
+    const DEMO_PDF_URL = 'https://raw.githubusercontent.com/mozilla/pdf.js/ba2edeae/web/compressed.tracemonkey-pldi-09.pdf';
+
+    // Elementos DOM
+    const el = {
+      pdfUpload: document.getElementById('pdf-upload'),
+      pageNum: document.getElementById('page-num'),
+      pageCount: document.getElementById('page-count'),
+      prevPage: document.getElementById('prev-page'),
+      nextPage: document.getElementById('next-page'),
+      zoomIn: document.getElementById('zoom-in'),
+      zoomOut: document.getElementById('zoom-out'),
+      zoomLevel: document.getElementById('zoom-level'),
+      canvasWrapper: document.getElementById('canvas-wrapper'),
+      subToolbar: document.getElementById('sub-toolbar'),
+      fontFamily: document.getElementById('font-family'),
+      fontSize: document.getElementById('font-size'),
+      btnBold: document.getElementById('btn-bold'),
+      btnItalic: document.getElementById('btn-italic'),
+      elementColor: document.getElementById('element-color'),
+      strokeWidth: document.getElementById('stroke-width'),
+      strokeWidthContainer: document.getElementById('stroke-width-container'),
+      
+      // Modais
+      modalSig: document.getElementById('modal-signature'),
+      closeModalSig: document.getElementById('close-modal-sig'),
+      cancelSig: document.getElementById('cancel-sig'),
+      applySig: document.getElementById('apply-sig'),
+      tabDraw: document.getElementById('tab-draw'),
+      tabType: document.getElementById('tab-type'),
+      contentTabDraw: document.getElementById('content-tab-draw'),
+      contentTabType: document.getElementById('content-tab-type'),
+      typedSigInput: document.getElementById('typed-sig-input'),
+      typedSigFont: document.getElementById('typed-sig-font'),
+      typedSigPreview: document.getElementById('typed-sig-preview'),
+
+      modalStamps: document.getElementById('modal-stamps'),
+      closeModalStamp: document.getElementById('close-modal-stamp'),
+
+      modalEmail: document.getElementById('modal-email'),
+      btnOpenEmailModal: document.getElementById('btn-open-email-modal'),
+      closeModalEmail: document.getElementById('close-modal-email'),
+      cancelEmail: document.getElementById('cancel-email'),
+      formSendEmail: document.getElementById('form-send-email'),
+
+      btnDownload: document.getElementById('btn-download'),
+      toast: document.getElementById('toast'),
+      toastMessage: document.getElementById('toast-message')
+    };
+
+    // --- INICIALIZAÇÃO ---
+    window.addEventListener('load', () => {
+      initFabricCanvas();
+      initSignaturePad();
+      setupEventListeners();
+      loadPDF(DEMO_PDF_URL);
+    });
+
+    // --- INICIALIZAR FABRIC.JS ---
+    function initFabricCanvas() {
+      // Criar o elemento canvas dinamicamente
+      const canvasEl = document.createElement('canvas');
+      canvasEl.id = 'editor-canvas';
+      el.canvasWrapper.appendChild(canvasEl);
+
+      state.fabricCanvas = new fabric.Canvas('editor-canvas', {
+        selection: true,
+        preserveObjectStacking: true
+      });
+
+      // Atualizar sub-toolbar ao selecionar objetos
+      state.fabricCanvas.on('selection:created', updateSubToolbarFromSelection);
+      state.fabricCanvas.on('selection:updated', updateSubToolbarFromSelection);
+      state.fabricCanvas.on('selection:cleared', resetSubToolbar);
+    }
+
+    // --- CARREGAR DOCUMENTO PDF ---
+    async function loadPDF(src) {
+      try {
+        showToast('Carregando documento...', 'info');
+        const loadingTask = typeof src === 'string' 
+          ? pdfjsLib.getDocument(src) 
+          : pdfjsLib.getDocument({ data: src });
+
+        state.pdfDoc = await loadingTask.promise;
+        state.pageCount = state.pdfDoc.numPages;
+        el.pageCount.textContent = state.pageCount;
+        state.pageNum = 1;
+        
+        renderPage(state.pageNum);
+      } catch (err) {
+        console.error('Erro ao carregar PDF:', err);
+        showToast('Erro ao carregar o arquivo PDF.', 'error');
+      }
+    }
+
+    // --- RENDERIZAR PÁGINA COM ASSINATURAS/ANOTAÇÕES ---
+    async function renderPage(num) {
+      // 1. Salvar estado da página anterior
+      if (state.currentPage) {
+        state.pageCanvasObjects[state.currentPage] = state.fabricCanvas.toJSON();
+      }
+      state.currentPage = num;
+      el.pageNum.textContent = num;
+
+      const page = await state.pdfDoc.getPage(num);
+      const viewport = page.getViewport({ scale: state.zoom * 1.3 });
+
+      // Renderizar o fundo do PDF em um canvas temporário
+      const pdfCanvas = document.createElement('canvas');
+      const pdfCtx = pdfCanvas.getContext('2d');
+      pdfCanvas.width = viewport.width;
+      pdfCanvas.height = viewport.height;
+
+      await page.render({ canvasContext: pdfCtx, viewport: viewport }).promise;
+
+      // Ajustar tamanho do Fabric.js
+      state.fabricCanvas.clear();
+      state.fabricCanvas.setWidth(viewport.width);
+      state.fabricCanvas.setHeight(viewport.height);
+
+      // Definir a imagem do PDF como imagem de fundo do Fabric.js
+      const bgImg = pdfCanvas.toDataURL('image/png');
+      fabric.Image.fromURL(bgImg, (img) => {
+        state.fabricCanvas.setBackgroundImage(img, state.fabricCanvas.renderAll.bind(state.fabricCanvas), {
+          scaleX: 1,
+          scaleY: 1
+        });
+      });
+
+      // Restaurar objetos anteriores da página se existirem
+      if (state.pageCanvasObjects[num]) {
+        state.fabricCanvas.loadFromJSON(state.pageCanvasObjects[num], () => {
+          state.fabricCanvas.renderAll();
+        });
+      }
+
+      updatePaginationButtons();
+    }
+
+    function updatePaginationButtons() {
+      el.prevPage.disabled = state.pageNum <= 1;
+      el.nextPage.disabled = state.pageNum >= state.pageCount;
+    }
+
+    // --- CONFIGURAÇÃO DE EVENTOS DE FERRAMENTAS ---
+    function setupEventListeners() {
+      // Upload de PDF local
+      el.pdfUpload.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file && file.type === 'application/pdf') {
+          const reader = new FileReader();
+          reader.onload = function(evt) {
+            const typedarray = new Uint8Array(evt.target.result);
+            loadPDF(typedarray);
+          };
+          reader.readAsArrayBuffer(file);
+        }
+      });
+
+      // Navegação de Páginas
+      el.prevPage.addEventListener('click', () => {
+        if (state.pageNum > 1) {
+          state.pageNum--;
+          renderPage(state.pageNum);
+        }
+      });
+
+      el.nextPage.addEventListener('click', () => {
+        if (state.pageNum < state.pageCount) {
+          state.pageNum++;
+          renderPage(state.pageNum);
+        }
+      });
+
+      // Controles de Zoom
+      el.zoomIn.addEventListener('click', () => {
+        if (state.zoom < 2.5) {
+          state.zoom += 0.2;
+          el.zoomLevel.textContent = `${Math.round(state.zoom * 100)}%`;
+          renderPage(state.pageNum);
+        }
+      });
+
+      el.zoomOut.addEventListener('click', () => {
+        if (state.zoom > 0.6) {
+          state.zoom -= 0.2;
+          el.zoomLevel.textContent = `${Math.round(state.zoom * 100)}%`;
+          renderPage(state.pageNum);
+        }
+      });
+
+      // Seleção de Ferramentas da Sidebar
+      const toolButtons = document.querySelectorAll('.tool-btn');
+      toolButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          toolButtons.forEach(b => b.classList.remove('active', 'bg-indigo-100', 'text-indigo-600'));
+          btn.classList.add('active', 'bg-indigo-100', 'text-indigo-600');
+          
+          const toolId = btn.id.replace('tool-', '');
+          setActiveTool(toolId);
+        });
+      });
+
+      // Deletar Elemento
+      document.getElementById('tool-delete').addEventListener('click', deleteSelectedObject);
+      window.addEventListener('keydown', (e) => {
+        if ((e.key === 'Delete' || e.key === 'Backspace') && !isInputFocused()) {
+          deleteSelectedObject();
+        }
+      });
+
+      // Eventos das Opções Dinâmicas da Toolbar (Texto/Fontes/Cores)
+      el.fontFamily.addEventListener('change', (e) => {
+        const activeObj = state.fabricCanvas.getActiveObject();
+        if (activeObj && activeObj.type === 'i-text') {
+          activeObj.set('fontFamily', e.target.value);
+          state.fabricCanvas.renderAll();
+        }
+      });
+
+      el.fontSize.addEventListener('input', (e) => {
+        const activeObj = state.fabricCanvas.getActiveObject();
+        if (activeObj && activeObj.type === 'i-text') {
+          activeObj.set('fontSize', parseInt(e.target.value) || 20);
+          state.fabricCanvas.renderAll();
+        }
+      });
+
+      el.btnBold.addEventListener('click', () => {
+        const activeObj = state.fabricCanvas.getActiveObject();
+        if (activeObj && activeObj.type === 'i-text') {
+          const isBold = activeObj.fontWeight === 'bold';
+          activeObj.set('fontWeight', isBold ? 'normal' : 'bold');
+          el.btnBold.classList.toggle('bg-slate-200', !isBold);
+          state.fabricCanvas.renderAll();
+        }
+      });
+
+      el.btnItalic.addEventListener('click', () => {
+        const activeObj = state.fabricCanvas.getActiveObject();
+        if (activeObj && activeObj.type === 'i-text') {
+          const isItalic = activeObj.fontStyle === 'italic';
+          activeObj.set('fontStyle', isItalic ? 'normal' : 'italic');
+          el.btnItalic.classList.toggle('bg-slate-200', !isItalic);
+          state.fabricCanvas.renderAll();
+        }
+      });
+
+      el.elementColor.addEventListener('input', (e) => {
+        const color = e.target.value;
+        const activeObj = state.fabricCanvas.getActiveObject();
+        if (activeObj) {
+          if (activeObj.type === 'i-text') activeObj.set('fill', color);
+          else if (activeObj.type === 'path' || activeObj.type === 'line') activeObj.set('stroke', color);
+          else {
+            activeObj.set('fill', color);
+            activeObj.set('stroke', color);
+          }
+          state.fabricCanvas.renderAll();
+        }
+        // Se a caneta estiver ativa
+        if (state.fabricCanvas.isDrawingMode) {
+          state.fabricCanvas.freeDrawingBrush.color = color;
+        }
+      });
+
+      el.strokeWidth.addEventListener('input', (e) => {
+        const val = parseInt(e.target.value);
+        const activeObj = state.fabricCanvas.getActiveObject();
+        if (activeObj) {
+          activeObj.set('strokeWidth', val);
+          state.fabricCanvas.renderAll();
+        }
+        if (state.fabricCanvas.isDrawingMode) {
+          state.fabricCanvas.freeDrawingBrush.width = val;
+        }
+      });
+
+      // Modais Handlers
+      el.closeModalSig.addEventListener('click', () => el.modalSig.classList.add('hidden'));
+      el.cancelSig.addEventListener('click', () => el.modalSig.classList.add('hidden'));
+      
+      el.closeModalStamp.addEventListener('click', () => el.modalStamps.classList.add('hidden'));
+
+      el.btnOpenEmailModal.addEventListener('click', () => el.modalEmail.classList.remove('hidden'));
+      el.closeModalEmail.addEventListener('click', () => el.modalEmail.classList.add('hidden'));
+      el.cancelEmail.addEventListener('click', () => el.modalEmail.classList.add('hidden'));
+
+      // Botão de Download PDF
+      el.btnDownload.addEventListener('click', generateFinalPDF);
+
+      // Envio de formulário de E-mail
+      el.formSendEmail.addEventListener('submit', handleSendEmail);
+
+      // Carimbos Options
+      document.querySelectorAll('.stamp-option').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const text = btn.getAttribute('data-stamp');
+          const color = btn.getAttribute('data-color');
+          addStampToCanvas(text, color);
+          el.modalStamps.classList.add('hidden');
+        });
+      });
+    }
+
+    // --- ATIVAR FERRAMENTA DA SIDEBAR ---
+    function setActiveTool(tool) {
+      state.activeTool = tool;
+      state.fabricCanvas.isDrawingMode = false;
+
+      switch(tool) {
+        case 'select':
+          break;
+
+        case 'text':
+          addTextToCanvas("Clique para editar o texto");
+          break;
+
+        case 'draw':
+          state.fabricCanvas.isDrawingMode = true;
+          state.fabricCanvas.freeDrawingBrush.color = el.elementColor.value;
+          state.fabricCanvas.freeDrawingBrush.width = parseInt(el.strokeWidth.value);
+          break;
+
+        case 'signature':
+          el.modalSig.classList.remove('hidden');
+          break;
+
+        case 'line':
+          addLineToCanvas();
+          break;
+
+        case 'arrow':
+          addArrowToCanvas();
+          break;
+
+        case 'rect':
+          addRectToCanvas();
+          break;
+
+        case 'circle':
+          addCircleToCanvas();
+          break;
+
+        case 'stamp':
+          el.modalStamps.classList.remove('hidden');
+          break;
+
+        case 'date':
+          const today = new Date().toLocaleDateString('pt-BR');
+          addTextToCanvas(`Data: ${today}`);
+          break;
+      }
+    }
+
+    // --- ADICIONAR OBJETOS AO CANVAS ---
+
+    function addTextToCanvas(textStr) {
+      const text = new fabric.IText(textStr, {
+        left: 100,
+        top: 100,
+        fontFamily: el.fontFamily.value,
+        fontSize: parseInt(el.fontSize.value) || 20,
+        fill: el.elementColor.value,
+        cornerColor: '#6366f1',
+        cornerSize: 8,
+        transparentCorners: false
+      });
+      state.fabricCanvas.add(text);
+      state.fabricCanvas.setActiveObject(text);
+      state.fabricCanvas.renderAll();
+    }
+
+    function addLineToCanvas() {
+      const line = new fabric.Line([50, 100, 250, 100], {
+        left: 100,
+        top: 100,
+        stroke: el.elementColor.value,
+        strokeWidth: parseInt(el.strokeWidth.value) || 3,
+        cornerColor: '#6366f1'
+      });
+      state.fabricCanvas.add(line);
+      state.fabricCanvas.setActiveObject(line);
+      state.fabricCanvas.renderAll();
+    }
+
+    function addArrowToCanvas() {
+      // Criar grupo com linha e triângulo representando seta
+      const line = new fabric.Line([0, 0, 120, 0], {
+        stroke: el.elementColor.value,
+        strokeWidth: parseInt(el.strokeWidth.value) || 3,
+        originX: 'center',
+        originY: 'center'
+      });
+      const triangle = new fabric.Triangle({
+        width: 15,
+        height: 15,
+        fill: el.elementColor.value,
+        left: 60,
+        top: 0,
+        angle: 90,
+        originX: 'center',
+        originY: 'center'
+      });
+      const arrowGroup = new fabric.Group([line, triangle], {
+        left: 100,
+        top: 100,
+        cornerColor: '#6366f1'
+      });
+      state.fabricCanvas.add(arrowGroup);
+      state.fabricCanvas.setActiveObject(arrowGroup);
+      state.fabricCanvas.renderAll();
+    }
+
+    function addRectToCanvas() {
+      const rect = new fabric.Rect({
+        left: 100,
+        top: 100,
+        fill: 'transparent',
+        stroke: el.elementColor.value,
+        strokeWidth: parseInt(el.strokeWidth.value) || 3,
+        width: 140,
+        height: 90,
+        rx: 4,
+        ry: 4,
+        cornerColor: '#6366f1'
+      });
+      state.fabricCanvas.add(rect);
+      state.fabricCanvas.setActiveObject(rect);
+      state.fabricCanvas.renderAll();
+    }
+
+    function addCircleToCanvas() {
+      const circle = new fabric.Circle({
+        left: 100,
+        top: 100,
+        fill: 'transparent',
+        stroke: el.elementColor.value,
+        strokeWidth: parseInt(el.strokeWidth.value) || 3,
+        radius: 50,
+        cornerColor: '#6366f1'
+      });
+      state.fabricCanvas.add(circle);
+      state.fabricCanvas.setActiveObject(circle);
+      state.fabricCanvas.renderAll();
+    }
+
+    function addStampToCanvas(text, color) {
+      const stampText = new fabric.Text(text, {
+        fontSize: 22,
+        fontFamily: 'Montserrat',
+        fontWeight: 'bold',
+        fill: color,
+        originX: 'center',
+        originY: 'center'
+      });
+
+      const rect = new fabric.Rect({
+        width: stampText.width + 30,
+        height: stampText.height + 16,
+        fill: 'rgba(255,255,255,0.85)',
+        stroke: color,
+        strokeWidth: 3,
+        rx: 6,
+        ry: 6,
+        originX: 'center',
+        originY: 'center'
+      });
+
+      const stampGroup = new fabric.Group([rect, stampText], {
+        left: 120,
+        top: 120,
+        angle: -10,
+        cornerColor: '#6366f1'
+      });
+
+      state.fabricCanvas.add(stampGroup);
+      state.fabricCanvas.setActiveObject(stampGroup);
+      state.fabricCanvas.renderAll();
+    }
+
+    function deleteSelectedObject() {
+      const activeObj = state.fabricCanvas.getActiveObject();
+      if (activeObj) {
+        state.fabricCanvas.remove(activeObj);
+        state.fabricCanvas.discardActiveObject();
+        state.fabricCanvas.renderAll();
+        showToast('Elemento removido.');
+      }
+    }
+
+    // --- SUB-TOOLBAR DE PROPRIEDADES ---
+    function updateSubToolbarFromSelection(e) {
+      const obj = e.selected[0];
+      if (!obj) return;
+
+      if (obj.type === 'i-text' || obj.type === 'text') {
+        el.fontFamily.value = obj.fontFamily || 'Inter';
+        el.fontSize.value = obj.fontSize || 20;
+        el.elementColor.value = obj.fill || '#1e293b';
+        el.btnBold.classList.toggle('bg-slate-200', obj.fontWeight === 'bold');
+        el.btnItalic.classList.toggle('bg-slate-200', obj.fontStyle === 'italic');
+      } else if (obj.type === 'path' || obj.type === 'line' || obj.type === 'rect' || obj.type === 'circle') {
+        el.elementColor.value = obj.stroke || obj.fill || '#1e293b';
+        if (obj.strokeWidth) el.strokeWidth.value = obj.strokeWidth;
+      }
+    }
+
+    function resetSubToolbar() {
+      el.btnBold.classList.remove('bg-slate-200');
+      el.btnItalic.classList.remove('bg-slate-200');
+    }
+
+    // --- PAD DE ASSINATURA DIGITAL (MODAL) ---
+    function initSignaturePad() {
+      const canvas = document.getElementById('signature-pad');
+      const ctx = canvas.getContext('2d');
+      state.sigCanvas = canvas;
+      state.sigCtx = ctx;
+
+      ctx.strokeStyle = '#1e1b4b';
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = 'round';
+
+      // Mouse & Touch events para o canvas de assinatura
+      const startDraw = (e) => {
+        state.isDrawingSig = true;
+        const pos = getCanvasPos(canvas, e);
+        ctx.beginPath();
+        ctx.moveTo(pos.x, pos.y);
+      };
+
+      const draw = (e) => {
+        if (!state.isDrawingSig) return;
+        const pos = getCanvasPos(canvas, e);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+      };
+
+      const stopDraw = () => {
+        state.isDrawingSig = false;
+      };
+
+      canvas.addEventListener('mousedown', startDraw);
+      canvas.addEventListener('mousemove', draw);
+      canvas.addEventListener('mouseup', stopDraw);
+      canvas.addEventListener('mouseleave', stopDraw);
+
+      canvas.addEventListener('touchstart', (e) => { e.preventDefault(); startDraw(e.touches[0]); });
+      canvas.addEventListener('touchmove', (e) => { e.preventDefault(); draw(e.touches[0]); });
+      canvas.addEventListener('touchend', stopDraw);
+
+      document.getElementById('clear-sig-pad').addEventListener('click', () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      });
+
+      // Alternância de Abas no Modal de Assinatura
+      el.tabDraw.addEventListener('click', () => {
+        el.tabDraw.className = "pb-2 px-4 border-b-2 border-indigo-600 font-semibold text-indigo-600 text-sm";
+        el.tabType.className = "pb-2 px-4 border-b-2 border-transparent font-medium text-slate-500 text-sm hover:text-slate-700";
+        el.contentTabDraw.classList.remove('hidden');
+        el.contentTabType.classList.add('hidden');
+      });
+
+      el.tabType.addEventListener('click', () => {
+        el.tabType.className = "pb-2 px-4 border-b-2 border-indigo-600 font-semibold text-indigo-600 text-sm";
+        el.tabDraw.className = "pb-2 px-4 border-b-2 border-transparent font-medium text-slate-500 text-sm hover:text-slate-700";
+        el.contentTabType.classList.remove('hidden');
+        el.contentTabDraw.classList.add('hidden');
+      });
+
+      // Preview de Assinatura Digitada
+      const updateTypedPreview = () => {
+        const text = el.typedSigInput.value || 'Sua Assinatura';
+        const font = el.typedSigFont.value;
+        el.typedSigPreview.textContent = text;
+        el.typedSigPreview.style.fontFamily = font;
+      };
+
+      el.typedSigInput.addEventListener('input', updateTypedPreview);
+      el.typedSigFont.addEventListener('change', updateTypedPreview);
+
+      // Aplicar Assinatura ao Canvas Principal
+      el.applySig.addEventListener('click', () => {
+        const isDrawTab = !el.contentTabDraw.classList.contains('hidden');
+
+        if (isDrawTab) {
+          const dataUrl = canvas.toDataURL('image/png');
+          fabric.Image.fromURL(dataUrl, (img) => {
+            img.set({
+              left: 120,
+              top: 120,
+              scaleX: 0.7,
+              scaleY: 0.7,
+              cornerColor: '#6366f1'
+            });
+            state.fabricCanvas.add(img);
+            state.fabricCanvas.setActiveObject(img);
+            state.fabricCanvas.renderAll();
+          });
+        } else {
+          const sigText = el.typedSigInput.value || 'Assinatura';
+          const font = el.typedSigFont.value;
+          const textObj = new fabric.IText(sigText, {
+            left: 120,
+            top: 120,
+            fontFamily: font,
+            fontSize: 36,
+            fill: '#1e1b4b',
+            cornerColor: '#6366f1'
+          });
+          state.fabricCanvas.add(textObj);
+          state.fabricCanvas.setActiveObject(textObj);
+          state.fabricCanvas.renderAll();
+        }
+
+        el.modalSig.classList.add('hidden');
+        showToast('Assinatura adicionada ao documento!');
+      });
+    }
+
+    function getCanvasPos(canvas, evt) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: (evt.clientX - rect.left) * (canvas.width / rect.width),
+        y: (evt.clientY - rect.top) * (canvas.height / rect.height)
+      };
+    }
+
+    // --- GERAR PDF FINAL COM AS ANOTAÇÕES E ASSINATURAS ---
+    async function generateFinalPDF() {
+      showToast('Processando e gerando o PDF final...', 'info');
+      
+      // Salvar página atual
+      state.pageCanvasObjects[state.pageNum] = state.fabricCanvas.toJSON();
+
+      const { jsPDF } = window.jspdf;
+      let pdfDocOutput = null;
+
+      for (let i = 1; i <= state.pageCount; i++) {
+        // Renderizar a página temporariamente
+        const page = await state.pdfDoc.getPage(i);
+        const viewport = page.getViewport({ scale: 1.5 });
+
+        // Canvas temporário de renderização
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = viewport.width;
+        tempCanvas.height = viewport.height;
+        const tempCtx = tempCanvas.getContext('2d');
+
+        await page.render({ canvasContext: tempCtx, viewport: viewport }).promise;
+
+        // Criar um Fabric.js temporário em memória para overlay
+        const tempFabricCanvas = new fabric.StaticCanvas(null, {
+          width: viewport.width,
+          height: viewport.height
+        });
+
+        // Carregar background da página PDF
+        const bgImgData = tempCanvas.toDataURL('image/png');
+        
+        await new Promise((resolve) => {
+          fabric.Image.fromURL(bgImgData, (img) => {
+            tempFabricCanvas.setBackgroundImage(img, tempFabricCanvas.renderAll.bind(tempFabricCanvas));
+
+            // Se houver objetos anotados nessa página, carregar
+            if (state.pageCanvasObjects[i]) {
+              tempFabricCanvas.loadFromJSON(state.pageCanvasObjects[i], () => {
+                tempFabricCanvas.renderAll();
+                resolve();
+              });
+            } else {
+              tempFabricCanvas.renderAll();
+              resolve();
+            }
+          });
+        });
+
+        // Exportar a combinação final da página em imagem alta resolução
+        const finalPageImg = tempFabricCanvas.toDataURL({ format: 'jpeg', quality: 0.95 });
+
+        const orientation = viewport.width > viewport.height ? 'landscape' : 'portrait';
+
+        if (i === 1) {
+          pdfDocOutput = new jsPDF({
+            orientation: orientation,
+            unit: 'px',
+            format: [viewport.width, viewport.height]
+          });
+        } else {
+          pdfDocOutput.addPage([viewport.width, viewport.height], orientation);
+        }
+
+        pdfDocOutput.addImage(finalPageImg, 'JPEG', 0, 0, viewport.width, viewport.height);
+      }
+
+      showToast('PDF finalizado com sucesso!');
+      return pdfDocOutput;
+    }
+
+    // Evento de Download
+    async function handleDownloadPDF() {
+      const pdf = await generateFinalPDF();
+      if (pdf) {
+        pdf.save('Documento_Assinado.pdf');
+      }
+    }
+
+    // --- DISPARO DE E-MAIL ---
+    async function handleSendEmail(e) {
+      e.preventDefault();
+      
+      const recipientName = document.getElementById('email-recipient-name').value;
+      const recipientEmail = document.getElementById('email-recipient-address').value;
+      const subject = document.getElementById('email-subject').value;
+      const message = document.getElementById('email-message').value;
+
+      showToast('Gerando documento e simulando envio...', 'info');
+
+      // Gera o documento final
+      const pdf = await generateFinalPDF();
+      const pdfBase64 = pdf.output('datauristring');
+
+      // Simulação de requisição REST API (ex: ZapSign, Docuseal ou backend Node.js)
+      setTimeout(() => {
+        el.modalEmail.classList.add('hidden');
+        
+        // Simula resposta de sucesso
+        showToast(`Documento enviado com sucesso para ${recipientEmail}!`, 'success');
+        
+        console.log("=== PAYLOAD DE ENVIO DE E-MAIL ===");
+        console.log({
+          to_name: recipientName,
+          to_email: recipientEmail,
+          subject: subject,
+          message: message,
+          pdf_attachment_length: pdfBase64.length
+        });
+      }, 1500);
+    }
+
+    // --- UTILITÁRIOS & TOAST ---
+    function showToast(msg, type = 'success') {
+      el.toastMessage.textContent = msg;
+      el.toast.classList.remove('translate-y-20', 'opacity-0');
+      
+      setTimeout(() => {
+        el.toast.classList.add('translate-y-20', 'opacity-0');
+      }, 3500);
+    }
+
+    function isInputFocused() {
+      const activeEl = document.activeElement;
+      return activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'SELECT';
+    }
+  </script>
+</body>
+</html>
